@@ -1,0 +1,4 @@
+Info (10281): Verilog HDL Declaration information at shuffler.v(4): object "start" differs only in case from object "START" in the same scope File: M:/ECE_287/Project/a_Main/shuffler.v Line: 4
+Info (10281): Verilog HDL Declaration information at shuffler.v(10): object "done" differs only in case from object "DONE" in the same scope File: M:/ECE_287/Project/a_Main/shuffler.v Line: 10
+Info (10281): Verilog HDL Declaration information at game_core.v(13): object "double" differs only in case from object "DOUBLE" in the same scope File: M:/ECE_287/Project/a_Main/game_core.v Line: 13
+Info (10281): Verilog HDL Declaration information at game_core.v(11): object "hit" differs only in case from object "HIT" in the same scope File: M:/ECE_287/Project/a_Main/game_core.v Line: 11
