@@ -1,0 +1,55 @@
+module game_core(
+	input        clk,
+	input        rst,             // active low
+	input        shuffle_btn,     // 1-clock pulse: shuffle the deck
+	input        rebuild_btn,     // 1-clock pulse: put the deck back in order
+	input  [5:0] rd_idx,          // which deck position to look at
+	output [5:0] rd_card,         // the card at that position: {suit, rank}
+	output       deck_ready,      // 1 when the deck is built
+	output reg   deck_shuffled    // 1 after a shuffle finishes, 0 after a rebuild
+);
+
+/* wires connecting the shuffler to the deck */
+wire        swap_en;
+wire [5:0]  swap_i;
+wire [5:0]  swap_j;
+wire        shuffle_done;
+
+/* instantiate the deck */
+deck the_deck(
+	.clk(clk),
+	.rst(rst),
+	.build(rebuild_btn),
+	.ready(deck_ready),
+	.swap_en(swap_en),
+	.swap_i(swap_i),
+	.swap_j(swap_j),
+	.rd_idx(rd_idx),
+	.rd_card(rd_card)
+);
+
+/* instantiate the shuffler */
+shuffler the_shuffler(
+	.clk(clk),
+	.rst(rst),
+	.start(shuffle_btn),
+	.deck_ready(deck_ready),
+	.swap_en(swap_en),
+	.swap_i(swap_i),
+	.swap_j(swap_j),
+	.done(shuffle_done)
+);
+
+/* deck_shuffled flag: stays high after a shuffle so you can see it on an LED
+   (shuffle_done is only a 20 ns pulse, too short to see) */
+always @(posedge clk or negedge rst)
+begin
+	if (rst == 1'b0)
+		deck_shuffled <= 1'b0;
+	else if (rebuild_btn == 1'b1)       // deck is back in order, so it's no longer shuffled
+		deck_shuffled <= 1'b0;
+	else if (shuffle_done == 1'b1)
+		deck_shuffled <= 1'b1;
+end
+
+endmodule

@@ -1,0 +1,90 @@
+module shuffler(
+    input        clk,
+    input        rst,          // active low, same as deck
+    input        start,        // 1-clock pulse: begin a shuffle
+    input        deck_ready,   // connect to deck's "ready" output
+    output reg   swap_en,      // to deck: swap this clock
+    output reg [5:0] swap_i,   // to deck
+    output reg [5:0] swap_j,   // to deck
+    output       done          // 1-clock pulse when shuffle is finished
+);
+
+// ---------- Part A: the LFSR (free running, never stops) ----------
+reg [15:0] lfsr;
+
+always @(posedge clk or negedge rst)
+begin
+    if (rst == 1'b0)
+        lfsr <= 16'hACE1;   // any NONZERO value (all zeros would lock up forever)
+    else
+        // shift left by one; the new bit 0 is the XOR of bits 15, 13, 12, 10
+        lfsr <= {lfsr[14:0], lfsr[15] ^ lfsr[13] ^ lfsr[12] ^ lfsr[10]};
+end
+
+wire [5:0] cand = lfsr[5:0];   // candidate value for j (0..63)
+
+// ---------- Part B: the shuffle FSM ----------
+localparam IDLE = 2'd0,   // waiting for start
+           PICK = 2'd1,   // trying to find a valid j
+           SWAP = 2'd2,   // swap_en is high this cycle
+           FIN  = 2'd3;   // one-cycle "done" state
+
+reg [1:0] state;
+reg [5:0] i;              // the position we are currently fixing (51 down to 1)
+
+assign done = (state == FIN);
+
+always @(posedge clk or negedge rst)
+begin
+    if (rst == 1'b0)
+    begin
+        state   <= IDLE;
+        swap_en <= 1'b0;
+        swap_i  <= 6'd0;
+        swap_j  <= 6'd0;
+        i       <= 6'd51;
+    end
+    else
+    begin
+        case (state)
+            IDLE:
+            begin
+                swap_en <= 1'b0;
+                if (start && deck_ready)   // only shuffle a fully built deck
+                begin
+                    i     <= 6'd51;        // start at the top of the deck
+                    state <= PICK;
+                end
+            end
+
+            PICK:
+            begin
+                if (cand <= i)             // accepted: cand is in [0, i]
+                begin
+                    swap_i  <= i;          // these registers hold steady...
+                    swap_j  <= cand;
+                    swap_en <= 1'b1;       // ...while swap_en is high
+                    state   <= SWAP;
+                end
+                // else: rejected, stay in PICK; lfsr has moved on, so we try again
+            end
+
+            SWAP:
+            begin
+                swap_en <= 1'b0;           // swap_en was high for exactly this one cycle
+                if (i == 6'd1)             // i = 1 was the last swap needed
+                    state <= FIN;
+                else
+                begin
+                    i     <= i - 6'd1;     // move down one position
+                    state <= PICK;
+                end
+            end
+
+            FIN:     state <= IDLE;
+            default: state <= IDLE;
+        endcase
+    end
+end
+
+endmodule

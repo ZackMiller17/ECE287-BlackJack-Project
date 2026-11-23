@@ -1,0 +1,122 @@
+module blackjack_game(
+
+	//////////// CLOCK //////////
+	input 		          		CLOCK_50,
+
+	//////////// SEG7 //////////
+	output		     [6:0]		HEX0,
+	output		     [6:0]		HEX1,
+	output		     [6:0]		HEX2,
+	output		     [6:0]		HEX3,
+	output		     [6:0]		HEX4,
+	output		     [6:0]		HEX5,
+
+	//////////// KEY //////////
+	input 		     [3:0]		KEY,
+
+	//////////// LED //////////
+	output		     [9:0]		LEDR,
+
+	//////////// SW //////////
+	input 		     [9:0]		SW,
+
+	//////////// VGA //////////
+	output		          		VGA_BLANK_N,
+	output		     [7:0]		VGA_B,
+	output		          		VGA_CLK,
+	output		     [7:0]		VGA_G,
+	output		          		VGA_HS,
+	output		     [7:0]		VGA_R,
+	output		          		VGA_SYNC_N,
+	output		          		VGA_VS
+);
+
+/* basic signals */
+wire clk;
+wire rst;
+assign clk = CLOCK_50;
+assign rst = KEY[0];                 // active low: pressing KEY[0] resets everything
+
+/* turn a button press into a single-clock pulse */
+reg [1:0] key_prev;
+always @(posedge clk)
+	key_prev <= KEY[2:1];            // remember last clock's button values
+
+wire shuffle_btn = key_prev[0] & ~KEY[1];   // KEY[1] just went from 1 to 0
+wire rebuild_btn = key_prev[1] & ~KEY[2];   // KEY[2] just went from 1 to 0
+
+/* game logic */
+wire [5:0] rd_card;
+wire       deck_ready;
+wire       deck_shuffled;
+
+game_core the_game(
+	.clk(clk),
+	.rst(rst),
+	.shuffle_btn(shuffle_btn),
+	.rebuild_btn(rebuild_btn),
+	.rd_idx(SW[5:0]),                // switches choose which deck position to look at
+	.rd_card(rd_card),
+	.deck_ready(deck_ready),
+	.deck_shuffled(deck_shuffled)
+);
+
+/* split the card into its two parts: rd_card = {suit, rank} */
+wire [1:0] card_suit = rd_card[5:4];
+wire [3:0] card_rank = rd_card[3:0];
+
+/* ---------- seven segment display of the card ---------- */
+
+/* HEX1:HEX0 = rank as a two digit decimal number */
+wire [6:0] rank_ones;
+wire [6:0] rank_tens;
+
+three_decimal_vals_w_neg rank_display(
+	.val({4'b0000, card_rank}),      // widen the 4 bit rank to the 8 bits the module expects
+	.seg7_dig0(rank_ones),
+	.seg7_dig1(rank_tens)
+	// seg7_neg_sign and seg7_dig2 are not needed, so they are left unconnected
+);
+
+/* HEX5:HEX4 = deck position being read, as a two digit decimal number */
+wire [6:0] pos_ones;
+wire [6:0] pos_tens;
+
+three_decimal_vals_w_neg pos_display(
+	.val({2'b00, SW[5:0]}),
+	.seg7_dig0(pos_ones),
+	.seg7_dig1(pos_tens)
+);
+
+/* HEX3 = suit as a single digit (0 to 3) */
+wire [6:0] suit_seg;
+
+seven_segment suit_display(
+	.val({2'b00, card_suit}),        // widen the 2 bit suit to the 4 bits the module expects
+	.seg(suit_seg)
+);
+
+assign HEX0 = rank_ones;
+assign HEX1 = rank_tens;
+assign HEX2 = 7'h7F;                 // blank (active low, so all 1s = all segments off)
+assign HEX3 = suit_seg;
+assign HEX4 = pos_ones;
+assign HEX5 = pos_tens;
+
+/* status LEDs */
+assign LEDR[0]   = deck_ready;
+assign LEDR[1]   = deck_shuffled;
+assign LEDR[9:2] = 8'b00000000;
+
+/* VGA: tied off for now. Later this is where vga_driver and the card renderer go,
+   fed by the hand registers from game_core */
+assign VGA_R       = 8'd0;
+assign VGA_G       = 8'd0;
+assign VGA_B       = 8'd0;
+assign VGA_HS      = 1'b1;
+assign VGA_VS      = 1'b1;
+assign VGA_CLK     = 1'b0;
+assign VGA_BLANK_N = 1'b0;
+assign VGA_SYNC_N  = 1'b1;
+
+endmodule
